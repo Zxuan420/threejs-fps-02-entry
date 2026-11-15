@@ -249,8 +249,11 @@ function runShot(name) {
     body.pitch = 0;
     body.yaw = 0;
     roundManager.startRoundAction();
-    roundManager.endRound('sentinel');
     settle(25);
+    roundManager.endRound('sentinel');
+    hud.setScore(GAME_STATE.scoreSentinels, GAME_STATE.scoreJackals);
+    hud.setMoney(GAME_STATE.money);
+    hud.setTimer(GAME_STATE.phase === 'buy' ? GAME_STATE.buyTimer : GAME_STATE.roundTimer, GAME_STATE.phase);
   }
   paintTwiceThenReady();
 }

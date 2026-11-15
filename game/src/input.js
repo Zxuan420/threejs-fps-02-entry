@@ -1,49 +1,92 @@
-// Keyboard and mouse, and the pointer lock that turns the mouse into look. Plain browser
-// APIs only: the game asks the canvas for pointer lock and reads movementX/Y while it holds it.
-export function createInput(canvas, onLockChange) {
-  const keys = new Set();
-  const state = { keys, locked: false, firing: false, lookX: 0, lookY: 0 };
+export function createInput(canvas, onLockChange, onBuyToggle, onSelectWeapon, onGrenade) {
+  const state = {
+    keys: new Set(),
+    firing: false,
+  };
 
-  function setKey(event, down) {
-    if (down) keys.add(event.code);
-    else keys.delete(event.code);
-    if (event.code === 'Space') event.preventDefault();
-  }
+  let lookX = 0;
+  let lookY = 0;
+  let isLocked = false;
+  let lockTime = 0;
 
-  window.addEventListener('keydown', (event) => setKey(event, true));
-  window.addEventListener('keyup', (event) => setKey(event, false));
-  window.addEventListener('blur', () => keys.clear());
-  window.addEventListener('mousemove', (event) => {
-    if (!state.locked) return;
-    state.lookX += event.movementX;
-    state.lookY += event.movementY;
-  });
-  window.addEventListener('mousedown', (event) => {
-    if (state.locked && event.button === 0) state.firing = true;
-  });
-  window.addEventListener('mouseup', (event) => {
-    if (event.button === 0) state.firing = false;
-  });
-  document.addEventListener('pointerlockchange', () => {
-    state.locked = document.pointerLockElement === canvas;
-    if (!state.locked) {
-      keys.clear();
-      state.firing = false;
+  canvas.addEventListener('mousedown', () => {
+    if (document.pointerLockElement === canvas) {
+      state.firing = true;
+    } else {
+      lockTime = performance.now();
+      canvas.requestPointerLock();
     }
-    onLockChange(state.locked);
+  });
+
+  window.addEventListener('mouseup', () => {
+    state.firing = false;
+  });
+
+  // Guards: ignore mousemove within 250ms of lock acquisition, filter single-event spikes (|delta| > 150), and clamp takeLook deltas to +/- 250
+  document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas) {
+      if (performance.now() - lockTime < 250) {
+        return;
+      }
+      const dx = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+      const dy = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+      if (Math.abs(dx) > 150 || Math.abs(dy) > 150) {
+        return;
+      }
+      lookX += dx;
+      lookY += dy;
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    state.keys.add(e.code);
+
+    if (e.code === 'KeyB') {
+      if (onBuyToggle) onBuyToggle();
+    } else if (e.code === 'Digit1') {
+      if (onSelectWeapon) onSelectWeapon(0);
+    } else if (e.code === 'Digit2') {
+      if (onSelectWeapon) onSelectWeapon(1);
+    } else if (e.code === 'Digit3') {
+      if (onSelectWeapon) onSelectWeapon(2);
+    } else if (e.code === 'Digit4') {
+      if (onSelectWeapon) onSelectWeapon(3);
+    } else if (e.code === 'Digit5') {
+      if (onSelectWeapon) onSelectWeapon(4);
+    } else if (e.code === 'Digit6') {
+      if (onSelectWeapon) onSelectWeapon(5);
+    } else if (e.code === 'KeyG') {
+      if (onGrenade) onGrenade();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    state.keys.delete(e.code);
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    isLocked = document.pointerLockElement === canvas;
+    if (isLocked) {
+      // Record timestamp to ignore synthetic post-lock mousemove jumps within 250ms
+      lockTime = performance.now();
+    }
+    if (onLockChange) {
+      onLockChange(isLocked);
+    }
   });
 
   return {
     state,
-    requestLock() {
-      canvas.requestPointerLock();
-    },
     takeLook() {
-      const x = state.lookX;
-      const y = state.lookY;
-      state.lookX = 0;
-      state.lookY = 0;
+      const x = Math.max(-250, Math.min(250, lookX));
+      const y = Math.max(-250, Math.min(250, lookY));
+      lookX = 0;
+      lookY = 0;
       return { x, y };
+    },
+    requestLock() {
+      lockTime = performance.now();
+      canvas.requestPointerLock();
     },
   };
 }
